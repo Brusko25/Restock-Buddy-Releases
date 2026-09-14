@@ -17,6 +17,14 @@ New to it? The bundled
 **[Restock-Buddy-User-Guide.pdf](Restock-Buddy-User-Guide.pdf)** is a
 field-by-field walkthrough written for first-time use.
 
+## Screenshots
+
+Screenshots from Restock Buddy 0.8.3 with example products. Monitoring is idle and no stock checks or notifications were sent. Click any image to see it full size.
+
+| Add and organize products | Manage monitoring |
+| --- | --- |
+| <a href="images/v0.8.3/products.png"><img src="images/v0.8.3/products.png" alt="Products page with two illustrative products" width="440"></a> | <a href="images/v0.8.3/monitor.png"><img src="images/v0.8.3/monitor.png" alt="Monitor dashboard with interval, browser selection and product status" width="440"></a> |
+
 ## Getting started
 
 1. Download the latest release and extract the folder anywhere you like.
