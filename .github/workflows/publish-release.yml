@@ -1,0 +1,110 @@
+name: Publish release
+# Creates a Restock Buddy release in this repository with its own token.
+# Push a temporary branch named publish/v<version>, made from main plus these files
+# from the private release candidate:
+#   Restock-Buddy-v<version>-Windows.zip, version.json, SHA256SUMS.txt, release-notes.md
+# The workflow checks them, creates the release from main, downloads the ZIP again
+# without a login to confirm its checksum, and only then updates version.json (which
+# installed copies read to find updates) and RELEASES.md on main. An existing release
+# is never replaced, and the temporary branch is always deleted.
+on:
+  push:
+    branches: ['publish/v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the publish branch
+        uses: actions/checkout@v7
+
+      - name: Check the files
+        id: check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#publish/}"; version="${tag#v}"
+          [[ "$version" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]] || { echo "::error::Invalid version in $GITHUB_REF_NAME"; exit 1; }
+          zip="Restock-Buddy-v$version-Windows.zip"
+          for file in "$zip" version.json SHA256SUMS.txt release-notes.md; do
+            [ -s "$file" ] || { echo "::error::Missing $file"; exit 1; }
+          done
+          tr -d '\r' < SHA256SUMS.txt > "$RUNNER_TEMP/sums.txt"
+          [ "$(awk 'NF == 2 { print $2 }' "$RUNNER_TEMP/sums.txt")" = "$zip" ] || { echo "::error::SHA256SUMS.txt must list exactly $zip"; exit 1; }
+          sha256sum -c "$RUNNER_TEMP/sums.txt"
+          sha="$(sha256sum "$zip" | cut -d' ' -f1)"
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$zip"
+          jq -e --arg v "$version" --arg u "$url" --arg s "$sha" \
+            '.version == $v and .download_url == $u and .sha256 == $s and (.changelog | length > 0)' version.json \
+            || { echo "::error::version.json does not match $tag (version, download_url, sha256, changelog)"; exit 1; }
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::$tag already exists. Published releases are never replaced."; exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/release"
+          cp "$zip" version.json SHA256SUMS.txt release-notes.md "$RUNNER_TEMP/release/"
+          { echo "tag=$tag"; echo "version=$version"; echo "zip=$zip"; echo "sha=$sha"; echo "url=$url"; } >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.check.outputs.tag }}
+          ZIP: ${{ steps.check.outputs.zip }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/release"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target main \
+            --title "Restock Buddy $TAG" --notes-file release-notes.md "$ZIP"
+
+      - name: Download it again without a login
+        shell: bash
+        env:
+          URL: ${{ steps.check.outputs.url }}
+          SHA: ${{ steps.check.outputs.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6; do
+            if curl -sSfL "$URL" -o "$RUNNER_TEMP/public.zip" && [ "$(sha256sum "$RUNNER_TEMP/public.zip" | cut -d' ' -f1)" = "$SHA" ]; then
+              echo "Public download matches $SHA"; exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::error::The public download does not match. version.json was NOT updated, so installed copies will not be offered this version."
+          exit 1
+
+      - name: Update version.json and RELEASES.md on main
+        shell: bash
+        env:
+          TAG: ${{ steps.check.outputs.tag }}
+          ZIP: ${{ steps.check.outputs.zip }}
+          URL: ${{ steps.check.outputs.url }}
+        run: |
+          set -euo pipefail
+          git fetch -q origin main && git checkout -q -B main FETCH_HEAD
+          cp "$RUNNER_TEMP/release/version.json" version.json
+          row="| [$TAG](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG) | $(date -u +%Y-%m-%d) | [Windows ZIP]($URL) |"
+          if ! grep -qF "/releases/tag/$TAG)" RELEASES.md; then
+            awk -v row="$row" '{ print } /^\| --- \| --- \| --- \|$/ && !done { print row; done = 1 }' RELEASES.md > RELEASES.new
+            mv RELEASES.new RELEASES.md
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.json RELEASES.md
+          git commit -q -m "Publish $TAG: update version.json and RELEASES.md"
+          git push -q origin main
+          echo "main updated: installed copies will now be offered $TAG"
+
+      - name: Delete the publish branch
+        if: always()
+        shell: bash
+        run: git push origin --delete "$GITHUB_REF_NAME" || true
