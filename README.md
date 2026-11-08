@@ -149,7 +149,7 @@ release.
 
 The app checks for updates on launch and from the button in the header.
 
-**v0.8.1 must be installed by hand if you are on v0.8 or earlier.** Extract the
+**If you are on v0.8 or earlier, install the latest version by hand once.** Extract the
 release **over your existing folder** — your settings and tracked products live
 in `settings.json`, which an install never overwrites.
 
@@ -157,7 +157,7 @@ Two separate reasons, depending on where you are coming from:
 
 - **From v0.8.** The project moved to a new address, and v0.8 checks the old
   one. It does not report an error; it simply keeps telling you that you are up
-  to date. Installing v0.8.1 by hand once points it at the new address, and
+  to date. Installing the latest version by hand once points it at the new address, and
   automatic updates continue normally from there.
 - **From v0.7 or earlier.** The application file was renamed from
   `PokeStockAlerts.exe` to `RestockBuddy.exe`, and those updaters look for the
@@ -166,6 +166,6 @@ Two separate reasons, depending on where you are coming from:
 In-app updating works normally from v0.8.1 onward. Versions v0.3.x and earlier
 relied on a compatibility launcher that no longer ships.
 
-Every published version, including earlier PokeStock Alerts releases, is listed in [Release history](RELEASES.md). Download the Windows ZIP from each release; GitHub's automatic Source code archives contain this documentation, not the application.
+The current version is listed in [Release history](RELEASES.md). Download the Windows ZIP from each release; GitHub's automatic Source code archives contain this documentation, not the application.
 
 ---
